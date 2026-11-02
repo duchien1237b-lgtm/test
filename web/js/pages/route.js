@@ -59,7 +59,7 @@ function drawMap() {
     paths.push({ pts: gres.routes[gres.pick].pts, color: 'var(--road)', width: 7, arrows: true });
     ctx.map.setPaths(paths);
     ctx.map.setDim(true);
-    legend.push({ type: 'line', color: 'var(--road)', label: 'Đường đi thật (Google Maps)', width: 5 });
+    legend.push({ type: 'line', color: 'var(--road)', label: 'Đường đi thật (' + ctx.map.geo.label + ')', width: 5 });
     legend.push({ type: 'dash', color: 'var(--go)', label: 'Đường của thuật toán đồ án' });
   } else if (r && r.found) {
     ctx.map.setPaths([{ nodes: r.path, color: 'var(--road)', width: 7, arrows: true }]);
@@ -177,14 +177,14 @@ function renderResult() {
 // Khối "Google Maps": đường ngắn nhất / nhanh nhất do Google tìm trên phố thật, đối chiếu với thuật toán của đồ án
 function googleHtml(r) {
   if (!ctx.map.geo || !r.found || !gres) return '';
-  if (gres.status === 'loading') return '<div class="block google-card"><div class="split"><h2>Google Maps</h2></div><p class="muted">Đang hỏi Google đường đi thật…</p></div>';
-  if (gres.status === 'err') return `<div class="block google-card"><div class="split"><h2>Google Maps</h2></div><div class="notice warn">${escapeHtml(gres.note)}</div></div>`;
+  if (gres.status === 'loading') return `<div class="block google-card"><div class="split"><h2>${ctx.map.geo.label}</h2></div><p class="muted">Đang hỏi đường đi thật…</p></div>`;
+  if (gres.status === 'err') return `<div class="block google-card"><div class="split"><h2>${ctx.map.geo.label}</h2></div><div class="notice warn">${escapeHtml(gres.note)}</div></div>`;
   const g = gres.routes[gres.pick];
   const dKm = g.meters / 1000 - r.km;
   const tag = criterion === 'time' ? 'Nhanh nhất' : 'Ngắn nhất';
   const cards = gres.routes.length > 1 ? `<div class="alt-list">${gres.routes.map((x, i) => `<button type="button" class="alt-card ${i === gres.pick ? 'active' : ''}" data-galt="${i}" style="--c:${ALT_COLORS[i % 4]}"><span class="alt-head">Tuyến Google ${i + 1}</span><span class="alt-nums">${fmtRoute(x)}</span></button>`).join('')}</div>` : '';
   return `<div class="block google-card">
-    <div class="split"><h2>Google Maps</h2><span class="chip ok">Đường thật</span></div>
+    <div class="split"><h2>${ctx.map.geo.label}</h2><span class="chip ok">Đường thật</span></div>
     <div class="trip-hero"><div class="th-top"><b class="th-time">${Math.max(1, Math.round(g.seconds / 60))} phút</b><span class="th-km">(${fmt.km(g.meters / 1000)})</span><span class="chip ok th-tag">${tag}</span></div>
       <p class="th-sub">So với thuật toán đồ án (${escapeHtml(r.name)}): ${fmt.km(r.km)}, ${fmt.min(r.minutes)}, chênh ${dKm >= 0 ? '+' : '−'}${fmt.km(Math.abs(dKm))}</p></div>
     ${cards}
@@ -211,7 +211,7 @@ async function askGoogle() {
     gres = { status: 'ok', routes, pick };
   } catch (e) {
     if (seq !== gSeq || !root) return;
-    gres = { status: 'err', note: geo.fatal ? `${geo.fatal}.` : 'Google chưa trả được đường đi giữa hai điểm này. Đang dùng kết quả của thuật toán đồ án.' };
+    gres = { status: 'err', note: geo.fatal ? `${geo.fatal}.` : 'Chưa lấy được đường đi thật giữa hai điểm này. Đang dùng kết quả của thuật toán đồ án.' };
   }
   renderResult();
   drawMap();

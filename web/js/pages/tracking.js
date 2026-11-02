@@ -161,7 +161,7 @@ function fillGoogleStats() {
     const coords = tr && tr.path.map((id) => ctx.store.nodesById.get(id)).map((n) => (n ? [n.x, n.y] : null));
     const e = geo && coords && !coords.some((c) => !c) ? geo.peek(coords, tr.vehicleName) : null;
     el.hidden = !e;
-    if (e) el.innerHTML = `<span class="chip ok">Google</span> đi đúng lộ trình trên đường thật: <b>${fmtRoute(e)}</b>`;
+    if (e) el.innerHTML = `<span class="chip ok">${geo.label}</span> đi đúng lộ trình trên đường thật: <b>${fmtRoute(e)}</b>`;
   }
 }
 

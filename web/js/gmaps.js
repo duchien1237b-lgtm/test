@@ -158,6 +158,7 @@ const ll = (c) => ({ lat: c[0], lng: c[1] });
 const d2 = (a, b) => { const dx = a[0] - b[0], dy = (a[1] - b[1]) * 0.98; return dx * dx + dy * dy; };
 
 export class RouteGeo {
+  label = 'Google Maps';
   constructor({ onUpdate, onFatal } = {}) {
     this.onUpdate = onUpdate || (() => {});
     this.onFatal = onFatal || (() => {});
@@ -285,3 +286,133 @@ export function directionsUrl(nodes, { vehicle = '', fromHere = false } = {}) {
 }
 
 export const placeUrl = (n) => `https://www.google.com/maps/search/?api=1&query=${pt(n)}`;
+
+// ---------------------------------------------------------------- OpenStreetMap (miễn phí, không cần khoá, không cần thẻ)
+// Nền: ảnh bản đồ (tile) của OpenStreetMap đặt dưới SVG, cùng phép chiếu Web Mercator nên không cần quy đổi toạ độ.
+// Đường thật: máy chủ OSRM công cộng (router.project-osrm.org, chỉ có ô tô). Dùng cho học tập / lưu lượng nhỏ; ghi công "© OpenStreetMap".
+const OSM_TILE = 'https://tile.openstreetmap.org';
+const OSRM = 'https://router.project-osrm.org/route/v1/driving';
+
+export class OsmBase {
+  constructor(stage, mapView) {
+    this.stage = stage;
+    this.mv = mapView;
+    this.el = null;
+    this.attr = null;
+    this.tiles = new Map();
+    this.size = '';
+    this.active = false;
+    this.geo = null;
+    this.onError = () => {};
+    this.onNotice = () => {};
+    this._mo = new MutationObserver(() => this._style());
+  }
+
+  async enable() {
+    if (this.active) return;
+    const el = document.createElement('div');
+    el.className = 'gm-base osm-base';
+    el.setAttribute('aria-hidden', 'true');
+    this.stage.insertBefore(el, this.stage.firstChild);
+    this.el = el;
+    const a = document.createElement('div');
+    a.className = 'osm-attr';
+    a.innerHTML = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>';
+    this.stage.append(a);
+    this.attr = a;
+    this._style();
+    this._mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    this.active = true;
+    this.stage.classList.add('gmap-on');
+    this.mv.base = this;
+    this.geo = new OsmGeo({ onUpdate: () => { this.mv.render(); document.dispatchEvent(new CustomEvent('geo:update')); }, onFatal: (m) => this.onNotice(m) });
+    this.mv.geo = this.geo;
+    this.mv.render();
+  }
+
+  disable() {
+    if (!this.active) return;
+    this._mo.disconnect();
+    this.active = false;
+    this.tiles.clear();
+    this.size = '';
+    if (this.el) this.el.remove();
+    if (this.attr) this.attr.remove();
+    this.el = this.attr = null;
+    this.stage.classList.remove('gmap-on');
+    if (this.mv.base === this) { this.mv.base = null; this.mv.geo = null; }
+    this.geo = null;
+    document.dispatchEvent(new CustomEvent('geo:update'));
+    this.mv.render();
+  }
+
+  _style() { if (this.el) this.el.classList.toggle('dark', isDark()); }
+
+  sync(w, h) {
+    const v = this.mv.view;
+    if (!this.active || !v || !(v.scale > 0)) return;
+    const c = this.mv.unproject(w / 2, h / 2);
+    if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) return;
+    const z = Math.log2((v.scale * 360) / 256);
+    const zi = Math.min(19, Math.max(0, Math.floor(z)));
+    const s = Math.pow(2, z - zi);
+    const n = Math.pow(2, zi);
+    const sin = Math.sin((Math.max(-85.05, Math.min(85.05, c.lat)) * Math.PI) / 180);
+    const cx = ((c.lon + 180) / 360) * 256 * n;
+    const cy = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * 256 * n;
+    const size = `${Math.round(w)}x${Math.round(h)}`;
+    if (size !== this.size) {
+      this.size = size;
+      Object.assign(this.el.style, { width: `${w * 2}px`, height: `${h * 2}px`, left: `${-w / 2}px`, top: `${-h / 2}px` });
+    }
+    this.el.style.transform = `scale(${s})`;
+    const hw = w / (2 * s) + 2, hh = h / (2 * s) + 2;
+    const x0 = Math.floor((cx - hw) / 256), x1 = Math.floor((cx + hw) / 256);
+    const y0 = Math.max(0, Math.floor((cy - hh) / 256)), y1 = Math.min(n - 1, Math.floor((cy + hh) / 256));
+    const want = new Set();
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const key = `${zi}/${tx}/${ty}`;
+        want.add(key);
+        let img = this.tiles.get(key);
+        if (!img) {
+          img = document.createElement('img');
+          img.alt = ''; img.draggable = false; img.decoding = 'async'; img.referrerPolicy = 'strict-origin-when-cross-origin';
+          img.src = `${OSM_TILE}/${zi}/${((tx % n) + n) % n}/${ty}.png`;
+          img.style.cssText = 'position:absolute;width:256px;height:256px;max-width:none;user-select:none';
+          this.el.append(img);
+          this.tiles.set(key, img);
+        }
+        img.style.left = `${w + tx * 256 - cx}px`;
+        img.style.top = `${h + ty * 256 - cy}px`;
+      }
+    }
+    for (const [key, img] of this.tiles) if (!want.has(key)) { img.remove(); this.tiles.delete(key); }
+  }
+}
+
+// Đường thật qua OSRM, cùng giao diện với RouteGeo của Google (peek / want / best / stats).
+export class OsmGeo extends RouteGeo {
+  constructor(o) { super(o); this.label = 'OpenStreetMap'; this.streak = 0; }
+  async _compute(coords, mode, { alternatives = false } = {}) {
+    if (this.fatal) throw new Error(this.fatal);
+    if (this.calls >= MAX_CALLS) { this.fatal = `Đã dùng ${MAX_CALLS} lượt hỏi OSRM trong lần mở trang này, các tuyến sau vẽ theo đồ thị. Tải lại trang để tiếp tục.`; this.onFatal(this.fatal); throw new Error(this.fatal); }
+    const path = coords.map((c) => `${c[1].toFixed(6)},${c[0].toFixed(6)}`).join(';');
+    const url = `${OSRM}/${path}?overview=full&geometries=geojson&steps=false${alternatives && coords.length === 2 ? '&alternatives=3' : ''}`;
+    this.calls++;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const res = await fetch(url, { signal: ctl.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes || !data.routes.length) throw new Error(data.code || 'ZERO_RESULTS');
+      this.streak = 0;
+      return data.routes.map((r) => ({ pts: r.geometry.coordinates.map((p) => [p[1], p[0]]), meters: r.distance || 0, seconds: r.duration || 0 })).filter((r) => r.pts.length > 1);
+    } catch (e) {
+      this.errors++;
+      if (++this.streak >= 4) { this.fatal = 'Máy chủ đường đi OSRM không trả lời: đang vẽ theo thuật toán của đồ án'; this.onFatal(this.fatal); }
+      throw e;
+    } finally { clearTimeout(timer); }
+  }
+}

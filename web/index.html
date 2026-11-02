@@ -41,9 +41,11 @@
   <!-- Bảng chọn nền bản đồ (ngoài .stage để nổi trên cả khung điều khiển bên dưới ở điện thoại) -->
   <div class="gm-pop" id="gm-pop" role="dialog" aria-label="Nền bản đồ" hidden>
     <h3>Nền bản đồ</h3>
+    <small class="muted">OpenStreetMap là mặc định: miễn phí, không cần khoá hay thẻ; đường đi thật lấy từ máy chủ OSRM công cộng (ô tô). Google Maps là tuỳ chọn khi bạn có khoá API.</small>
     <div class="seg" id="gm-seg" role="radiogroup" aria-label="Chọn nền bản đồ">
+      <button type="button" role="radio" data-base="osm" aria-checked="false">OpenStreetMap</button>
       <button type="button" role="radio" data-base="google" aria-checked="false">Google Maps</button>
-      <button type="button" role="radio" data-base="schematic" aria-checked="true">Sơ đồ (dự phòng)</button>
+      <button type="button" role="radio" data-base="schematic" aria-checked="false">Sơ đồ</button>
     </div>
     <label class="field"><span>Khoá API Google Maps</span><input id="gm-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
     <label class="check"><input type="checkbox" id="gm-traffic"> Tính giao thông thực tế khi ước tính thời gian (ô tô; Google tính phí cao hơn)</label>

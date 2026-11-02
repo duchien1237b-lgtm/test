@@ -2142,8 +2142,8 @@ int runWebServer(const ServerConfig& cfg) {
         res.set_header("Content-Security-Policy",
                        "default-src 'self'; script-src 'self' https://maps.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com blob:; "
                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                       "img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://*.googleusercontent.com; "
-                       "font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com data: blob:; "
+                       "img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://*.googleusercontent.com https://tile.openstreetmap.org; "
+                       "font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://router.project-osrm.org https://*.googleapis.com https://*.google.com https://*.gstatic.com data: blob:; "
                        "worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
         if (req.path.rfind("/api/", 0) == 0) res.set_header("Cache-Control", "no-store");
     });
