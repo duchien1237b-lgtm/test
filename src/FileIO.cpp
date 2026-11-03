@@ -381,6 +381,13 @@ bool parseOrders(const std::vector<Line>& lines, std::vector<OrderRecord>& order
             } else if (key == "xong") {
                 if (!number(n, 9999999999LL)) return false;
                 o.closedAt = n;
+            } else if (key == "loai") {
+                static const std::set<std::string> cats = {"tailieu", "thucpham", "quanao", "dientu", "devo", "khac"};
+                if (!cats.count(val)) {
+                    error = at(l) + "loai= phai la tailieu, thucpham, quanao, dientu, devo hoac khac";
+                    return false;
+                }
+                o.category = val;
             } else {
                 break;
             }
@@ -454,6 +461,7 @@ void writeOrders(std::ostream& out, const std::vector<OrderRecord>& orders) {
         if (o.receiverPays) out << " tra=1";
         if (o.returnFee) out << " hoan=" << o.returnFee;
         if (o.closedAt) out << " xong=" << o.closedAt;
+        if (!o.category.empty()) out << " loai=" << o.category;
         // '#' trong ghi chú sẽ bị hiểu là chú thích khi đọc lại -> thay bằng '-'
         std::string note = o.note;
         for (char& c : note) if (c == '#' || c == '\n' || c == '\r') c = '-';
@@ -461,7 +469,7 @@ void writeOrders(std::ostream& out, const std::vector<OrderRecord>& orders) {
             // ghi chú bắt đầu bằng một khoá nghiệp vụ ("kh=...") sẽ bị đọc nhầm thành trường -> thêm '-' phía trước
             static const std::set<std::string> keys = {"cod", "sdt", "nhan", "kh", "ma", "ck", "tv", "gia", "ngay", "tao", "xn",
                                                        "tt", "sh", "eta", "gx", "lan", "ly", "huy", "bc", "gt", "cu", "dc",
-                                                       "gtri", "bh", "kt", "tra", "hoan", "xong"};
+                                                       "gtri", "bh", "kt", "tra", "hoan", "xong", "loai"};
             size_t eq = note.find('=');
             size_t sp = note.find(' ');
             if (eq != std::string::npos && (sp == std::string::npos || eq < sp) && keys.count(note.substr(0, eq))) note = "-" + note;

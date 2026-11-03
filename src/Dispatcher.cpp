@@ -24,7 +24,7 @@ Order::Order(const OrderRecord& r)
       eta(r.eta), deliveredAt(r.deliveredAt), attempts(r.attempts), failReason(r.failReason), cancelFee(r.cancelFee),
       proofNote(r.proofNote), deliveredReal(r.deliveredReal), codRecorded(r.codRecorded), address(r.address),
       declaredValue(r.declaredValue), insuranceFee(r.insuranceFee), dimL(r.dimL), dimW(r.dimW), dimH(r.dimH),
-      receiverPays(r.receiverPays), returnFee(r.returnFee), closedAt(r.closedAt) {}
+      receiverPays(r.receiverPays), returnFee(r.returnFee), closedAt(r.closedAt), category(r.category) {}
 
 OrderRecord Order::toRecord() const {
     OrderRecord r;
@@ -63,6 +63,7 @@ OrderRecord Order::toRecord() const {
     r.receiverPays = receiverPays;
     r.returnFee = returnFee;
     r.closedAt = closedAt;
+    r.category = category;
     return r;
 }
 

@@ -42,7 +42,7 @@ function positionOf(trip, time) {
     if (time < T[i]) {  // đang chạy giữa nút i-1 và i
       const a = at(i - 1), b = at(i), d0 = depart(i - 1);
       const f = T[i] > d0 ? Math.min(1, Math.max(0, (time - d0) / (T[i] - d0))) : 1;
-      return { lat: a.x + (b.x - a.x) * f, lon: a.y + (b.y - a.y) * f, index: i - 1, state: 'drive', next: i };
+      return { lat: a.x + (b.x - a.x) * f, lon: a.y + (b.y - a.y) * f, index: i - 1, state: 'drive', next: i, along: { nodes: P, i: i - 1, f, vehicle: trip.vehicleName } };
     }
     if (time < depart(i)) return { ...ll(at(i)), index: i, state: 'serve' };
   }
@@ -119,7 +119,7 @@ function drawMap() {
     if (tr.approach && tr.approach.length > 1) paths.push({ nodes: tr.approach, color, width: 3, opacity: 0.6, dash: '6 6', animate: false, geo: true, vehicle: veh });
     paths.push({ nodes: tr.path, color, width: 4, opacity: tr.accepted === false ? 0.2 : 0.35, animate: false, geo: true, vehicle: veh });
     if (pos.index > 0) paths.push({ nodes: tr.path.slice(0, pos.index + 1), color, width: 6, animate: false, arrows: true, geo: { nodes: tr.path, from: 0, vehicle: veh } });
-    markers.push({ lat: pos.lat, lon: pos.lon, color, label: initial(tr.name), title: tr.name });
+    markers.push({ lat: pos.lat, lon: pos.lon, along: pos.along, color, label: initial(tr.name), title: tr.name });
     tr.stops.forEach((s, j) => {
       const o = ob.get(s.order) || {};
       const badge = o.status === 2 ? '✓' : o.status === 3 ? '✕' : o.status === 5 ? '↩' : String(j + 1);

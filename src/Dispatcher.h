@@ -82,6 +82,7 @@ struct Order {
     bool receiverPays = false;
     long long returnFee = 0;
     long long closedAt = 0;    // giây (đồng hồ thật) lúc đơn hoàn kho / bị huỷ
+    std::string category;      // loại hàng (Commerce::categoryName), rỗng = không khai
     // Ghép đơn tự động (chỉ trong bộ nhớ, không lưu vào orders.txt)
     std::vector<int> tried;    // chỉ số shipper đã từ chối / bỏ lỡ lời mời của đơn này (không mời lại)
     long long searchSince = 0; // giây (đồng hồ thật) đơn bắt đầu chờ ghép shipper

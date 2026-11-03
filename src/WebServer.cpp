@@ -107,7 +107,10 @@ struct AppState {
     Support::Mailbox mailbox;
     Support::ComplaintStore complaints;
     Flow::CodLedger cod;
-    Billing::CustomerLedger ledger;       // chi trả / thu bù / bồi thường của khách (ví đối soát)
+    Billing::CustomerLedger ledger;       // chi trả / thu bù / bồi thường / tiền tip của khách (ví đối soát)
+    Commerce::ChatStore chat;             // trò chuyện trong đơn giữa khách và shipper
+    Commerce::PrefStore prefs;            // shipper yêu thích / bị chặn của từng khách
+    std::map<std::string, int> missStreak;   // số lời mời shipper bỏ qua / bỏ lỡ liên tiếp (chỉ trong bộ nhớ)
     Auth::ResetStore resets;
     Auth::RateLimiter limiter;
     bool demo = true;                     // chế độ demo: hộp thư giả lập đọc được qua giao diện
@@ -152,7 +155,8 @@ const size_t MAX_BODY = 4 * 1024 * 1024;
 // Các file cần ghi lại sau khi xử lý xong yêu cầu (xem flushDirty)
 enum Dirty : unsigned {
     D_USERS = 1, D_PROMOS = 2, D_ADDR = 4, D_REVIEWS = 8, D_STATS = 16, D_NOTES = 32,
-    D_AUDIT = 64, D_COMPL = 128, D_COD = 256, D_CONFIG = 512, D_ORDERS = 1024, D_FLEET = 2048, D_LEDGER = 4096, D_CREVIEWS = 8192
+    D_AUDIT = 64, D_COMPL = 128, D_COD = 256, D_CONFIG = 512, D_ORDERS = 1024, D_FLEET = 2048, D_LEDGER = 4096, D_CREVIEWS = 8192,
+    D_CHAT = 16384, D_PREFS = 32768
 };
 void mark(unsigned bits) {
     S.dirty |= bits;
@@ -655,6 +659,10 @@ bool cancelAllowedNow(const Order& o) {
     return !(isCustomer() && o.status == ASSIGNED && pickedUp(o));
 }
 
+const int64_t TIP_WINDOW = 7 * 86400;   // khách tip trong 7 ngày sau khi giao
+// Trò chuyện khách <-> shipper mở khi shipper đã nhận đơn và đơn chưa kết thúc (đang giao / giao thất bại chờ xử lý)
+bool chatOpen(const Order& o) { return o.shipper >= 0 && !o.owner.empty() && (o.status == ASSIGNED || o.status == FAILED); }
+
 // Phần cước shipper nhận (cùng công thức với lúc ghi nhận đã giao)
 long long shipperEarning(const Order& o, const Pricing::Fee& fee) {
     long long part = fee.valid ? Commerce::shippingPart(fee) : 0;
@@ -729,6 +737,20 @@ Json orderRow(const Order& o, size_t index, const Pricing::Fee& fee, const std::
             long long part = fee.valid ? Commerce::shippingPart(fee) : 0;
             j.set("cancelFeeNow", static_cast<double>(Flow::cancelFee(cancelFeeStatus(o), std::max(0LL, part - o.loyaltyDiscount - o.promoDiscount), Commerce::config())));
         }
+    }
+    // Nghiệp vụ kiểu Grab: loại hàng, tiền tip, trò chuyện, shipper yêu thích / bị chặn
+    j.set("category", o.category).set("categoryName", Commerce::categoryName(o.category));
+    {
+        const Billing::Tx* tip = S.ledger.tipOf(o.id);
+        j.set("tip", static_cast<double>(tip ? tip->amount : 0));
+        if (isCustomer() && o.owner == S.me.username)
+            j.set("canTip", !tip && o.status == DELIVERED && o.shipper >= 0 && Commerce::config().tipMax > 0 &&
+                                (o.deliveredReal == 0 || nowSeconds() - o.deliveredReal <= TIP_WINDOW));
+    }
+    j.set("chatCount", S.chat.count(o.id)).set("chatOpen", chatOpen(o));
+    if (isCustomer() && o.shipper >= 0 && o.shipper < static_cast<int>(S.shippers.size()) && o.status != DISPATCHED) {
+        const std::string& nm = S.shippers[o.shipper].name;
+        j.set("carrierPref", S.prefs.isFavorite(o.owner, nm) ? "fav" : S.prefs.isBlocked(o.owner, nm) ? "block" : "");
     }
     // Mã xác nhận giao: chỉ chủ đơn thấy (đọc cho shipper khi nhận hàng). Điều phối viên, quản trị viên và shipper không thấy.
     if (isCustomer() && o.owner == S.me.username) j.set("code", o.deliveryCode);
@@ -1004,6 +1026,9 @@ Json configJson() {
         .set("offerSeconds", c.offerSeconds)
         .set("matchGiveUp", c.matchGiveUp)
         .set("clockSpeed", c.clockSpeed)
+        .set("missLimit", c.missLimit)
+        .set("codHoldLimit", static_cast<double>(c.codHoldLimit))
+        .set("tipMax", static_cast<double>(c.tipMax))
         .set("tariff", tariffJson());
 }
 
@@ -1033,6 +1058,7 @@ Json stateJson() {
                            .set("autoMatch", Commerce::config().autoMatch)
                            .set("offerSeconds", Commerce::config().offerSeconds)
                            .set("clockSpeed", Commerce::config().clockSpeed)
+                           .set("tipMax", static_cast<double>(Commerce::config().tipMax))
                            .set("tariff", tariffJson()))
         .set("settings", Json::object().set("shiftStart", S.shiftStart).set("rush", rushJson()))
         .set("shift", shiftJson())
@@ -1212,6 +1238,8 @@ void flushDirty() {
     if (d & D_COMPL) writeDataFile("complaints.txt", S.complaints.toText());
     if (d & D_COD) writeDataFile("cod_ledger.txt", S.cod.toText());
     if (d & D_LEDGER) writeDataFile("customer_ledger.txt", S.ledger.toText());
+    if (d & D_CHAT) writeDataFile("order_chat.txt", S.chat.toText());
+    if (d & D_PREFS) writeDataFile("customer_prefs.txt", S.prefs.toText());
     if (d & D_CONFIG) writeDataFile("config.txt", Commerce::config().toText());
     if (d & D_FLEET) writeDataFile("shippers.txt", shippersToText(S.shippers));
     if ((d & D_ORDERS) && S.dataset == "hcm") writeDataFile("orders_live.txt", liveOrdersText());
@@ -1815,7 +1843,8 @@ void registerRoutes(httplib::Server& svr) {
             S.accounts.renameLink(oldName, S.shippers[i].name);
             S.stats.rename(oldName, S.shippers[i].name);
             S.cod.renameShipper(oldName, S.shippers[i].name);
-            mark(D_USERS | D_STATS | D_COD);
+            S.prefs.renameShipper(oldName, S.shippers[i].name);
+            mark(D_USERS | D_STATS | D_COD | D_PREFS);
         }
         mark(D_FLEET | D_ORDERS);
         audit("fleet.update", S.shippers[i].name);
@@ -2109,6 +2138,8 @@ int runWebServer(const ServerConfig& cfg) {
     loadOptional("complaints.txt", [](const std::string& t, std::string& e) { return S.complaints.loadText(t, e); });
     loadOptional("cod_ledger.txt", [](const std::string& t, std::string& e) { return S.cod.loadText(t, e); });
     loadOptional("customer_ledger.txt", [](const std::string& t, std::string& e) { return S.ledger.loadText(t, e); });
+    loadOptional("order_chat.txt", [](const std::string& t, std::string& e) { return S.chat.loadText(t, e); });
+    loadOptional("customer_prefs.txt", [](const std::string& t, std::string& e) { return S.prefs.loadText(t, e); });
     if (!loadShippers(dataPath("shippers.txt"), S.shippers, err)) {
         std::cerr << "[Canh bao] " << err << " -> dung 2 shipper mac dinh\n";
         S.shippers = {{"Shipper 1", 20, MOTORBIKE}, {"Shipper 2", 50, CAR}};

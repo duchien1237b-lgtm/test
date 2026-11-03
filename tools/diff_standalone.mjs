@@ -591,6 +591,78 @@ try {
   await step('p2 admin state bật lại', 'GET', 'state');
   await logout();
 
+  // ---- p3: nghiệp vụ kiểu Grab v12 (loại hàng, trò chuyện trong đơn, tip, shipper yêu thích / bị chặn, hạn mức tiền mặt, tự tạm nghỉ)
+  await login('khachvip', 'Huong@2027x');
+  await step('p3 đặt đơn loại hàng sai', 'POST', 'order/add', { destination: 6, weight: 1, recipient: 'Anh Chín', phone: '0977777770', category: 'vukhi', pledge: 1 });
+  await step('p3 đặt đơn thiếu cam kết', 'POST', 'order/add', { destination: 6, weight: 1, recipient: 'Anh Chín', phone: '0977777770', category: 'devo' });
+  await step('p3 đặt đơn dễ vỡ', 'POST', 'order/add', { destination: 6, weight: 1, recipient: 'Anh Chín', phone: '0977777770', category: 'devo', pledge: 1 }, (b, v) => { v.q7 = b.created; });
+  await step('p3 nhắn khi chưa có shipper nhận', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'Alo' }));
+  await step('p3 tip đơn chưa giao', 'POST', 'order/tip', (v) => ({ id: v.q7, amount: 10000 }));
+  await step('p3 xem q7', 'GET', 'order/get', (v) => ({ id: v.q7 }), (b, v) => { v.code7 = b.order?.code; });
+  await step('p3 xem q4 đã giao', 'GET', 'order/get', (v) => ({ id: v.q4 }), (b, v) => { v.ship4 = b.order?.carrierInfo?.name; });
+  await step('p3 xem chat đơn người khác', 'GET', 'order/chat', { id: 101 });
+  await logout();
+  await step('p3 người nhận tra cứu khi chưa có shipper', 'GET', 'track', (v) => ({ code: String(v.q7), phone: '0977777770' }), (b) => { if (b.order && b.order.code) console.error('LỖI: lộ mã trước khi shipper nhận'); });
+  await nominee('p3 q7', 'q7', async () => {
+    await step('p3 q7 nhận', 'POST', 'trip/accept', (v) => ({ id: v.trip }));
+    await step('p3 shipper xem chat', 'GET', 'order/chat', (v) => ({ id: v.q7 }));
+    await step('p3 shipper nhắn rỗng', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: '   ' }));
+    await step('p3 shipper nhắn quá dài', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'x'.repeat(301) }));
+    await step('p3 shipper nhắn', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'Mình đã lấy hàng,\nđang tới' }));
+    await step('p3 shipper xem sở thích khách', 'GET', 'customer/shippers');
+    await step('p3 shipper tip', 'POST', 'order/tip', (v) => ({ id: v.q7, amount: 5000 }));
+  });
+  const nom7 = C.vars.nom;
+  await step('p3 người nhận tra cứu thấy mã', 'GET', 'track', (v) => ({ code: String(v.q7), phone: '0977777770' }), (b, v) => { if (!b.order || b.order.code !== v.code7) console.error('LỖI: người nhận không thấy đúng mã', b.order && b.order.code, v.code7); });
+  await step('p3 tra cứu sai SĐT', 'GET', 'track', (v) => ({ code: String(v.q7), phone: '0977777771' }));
+  await login('khachvip', 'Huong@2027x');
+  await step('p3 khách xem chat', 'GET', 'order/chat', (v) => ({ id: v.q7 }));
+  await step('p3 khách nhắn', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'Gọi mình khi tới nhé' }));
+  await step('p3 khách thông báo', 'GET', 'notifications');
+  await step('p3 tip lẻ', 'POST', 'order/tip', (v) => ({ id: v.q4, amount: 1500 }));
+  await step('p3 tip quá mức', 'POST', 'order/tip', (v) => ({ id: v.q4, amount: 300000 }));
+  await step('p3 tip q4', 'POST', 'order/tip', (v) => ({ id: v.q4, amount: 20000, note: 'Cảm ơn bạn giao nhanh' }));
+  await step('p3 tip lại q4', 'POST', 'order/tip', (v) => ({ id: v.q4, amount: 20000 }));
+  await step('p3 ví sau tip', 'GET', 'wallet');
+  await step('p3 danh sách shipper', 'GET', 'customer/shippers');
+  await step('p3 yêu thích shipper lạ', 'POST', 'customer/shipper-pref', { shipper: 'Không Ai', action: 'fav' });
+  await step('p3 yêu thích', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'fav' }));
+  await step('p3 yêu thích lại', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'fav' }));
+  await step('p3 thao tác sai', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'xyz' }));
+  await step('p3 chặn', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'block' }));
+  await step('p3 xem q4 sau chặn', 'GET', 'order/get', (v) => ({ id: v.q4 }));
+  await step('p3 bỏ chặn', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'unblock' }));
+  await step('p3 bỏ chặn lại', 'POST', 'customer/shipper-pref', (v) => ({ shipper: v.ship4 ?? '', action: 'unblock' }));
+  await logout();
+  if (nom7) {
+    await login(nom7[0], nom7[1]);
+    await step('p3 q7 giao', 'POST', 'order/deliver', (v) => ({ id: v.q7, code: v.code7 ?? '0000' }));
+    await step('p3 nhắn sau khi giao', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'Cảm ơn' }));
+    await step('p3 thu nhập có tip', 'GET', 'shipper/stats');
+    await logout();
+    await step('p3 tra cứu sau khi giao', 'GET', 'track', (v) => ({ code: String(v.q7), phone: '0977777770' }), (b) => { if (b.order && b.order.code) console.error('LỖI: còn hiện mã sau khi giao'); });
+  }
+  await login('admin', 'admin123');
+  await step('p3 admin xem chat', 'GET', 'order/chat', (v) => ({ id: v.q7 }));
+  await step('p3 tổng đài nhắn', 'POST', 'order/chat/send', (v) => ({ id: v.q7, text: 'Tổng đài đã ghi nhận' }));
+  await step('p3 cấu hình sai missLimit', 'POST', 'config/update', { missLimit: 30 });
+  await step('p3 cấu hình sai tipMax', 'POST', 'config/update', { tipMax: 1500 });
+  await step('p3 hạn mức tiền mặt thấp', 'POST', 'config/update', { codHoldLimit: 1000 });
+  await step('p3 đặt hộ đơn COD', 'POST', 'order/add', { destination: 4, weight: 1, owner: 'anphat', recipient: 'Cô Mười', phone: '0988888880', cod: 50000 }, (b, v) => { v.q8 = b.created; });
+  await step('p3 state hết shipper vì hạn mức', 'GET', 'state');
+  await step('p3 hạn mức tiền mặt lại', 'POST', 'config/update', { codHoldLimit: 5000000, missLimit: 2 });
+  await step('p3 cấu hình', 'GET', 'config');
+  await step('p3 tìm lại q8', 'POST', 'order/retry', (v) => ({ id: v.q8 }));
+  await logout();
+  await nominee('p3 q8 từ chối', 'q8', async () => {
+    await step('p3 q8 từ chối', 'POST', 'trip/decline', (v) => ({ id: v.trip, reason: 'Xa quá' }));
+    await step('p3 thống kê sau 1 lần', 'GET', 'shipper/stats');
+  });
+  await login('admin', 'admin123');
+  await step('p3 state cuối', 'GET', 'state');
+  await step('p3 nhật ký', 'GET', 'audit', { size: 30 });
+  await logout();
+
   await login('admin', 'admin123');
   await step('admin nhật ký cuối', 'GET', 'audit', { size: 100 });
   await step('admin báo cáo cuối', 'GET', 'reports/summary');
@@ -609,7 +681,7 @@ console.log(`\n${steps} bước, ${bad} bước khác nhau. Mã HTTP: ${JSON.str
 // So file dữ liệu được ghi ra
 const lsm = globalThis.localStorage._m;
 let fileDiffs = 0;
-for (const f of ['users.txt', 'promos.txt', 'addresses.txt', 'reviews.txt', 'stats.txt', 'complaints.txt', 'cod_ledger.txt', 'config.txt', 'shippers.txt', 'customer_ledger.txt', 'customer_reviews.txt']) {
+for (const f of ['users.txt', 'promos.txt', 'addresses.txt', 'reviews.txt', 'stats.txt', 'complaints.txt', 'cod_ledger.txt', 'config.txt', 'shippers.txt', 'customer_ledger.txt', 'customer_reviews.txt', 'order_chat.txt', 'customer_prefs.txt']) {
   const a = fs.existsSync(`${dataDir}/${f}`) ? fs.readFileSync(`${dataDir}/${f}`, 'utf8') : null;
   const b = lsm.get('dt08.f.' + f) ?? null;
   const strip = (t) => t == null ? null : t.split('\n').map((l) => l.replace(/\b1[67]\d{8}\b/g, 'T').replace(/ [0-9a-f]{16} [0-9a-f]{64}/g, ' SALT HASH').replace(/(\s|^)\d{4}(?=\s|$)/g, '$1CODE')).join('\n');

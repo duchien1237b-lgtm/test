@@ -97,6 +97,9 @@ var S = {
   complaints: new ComplaintStore,
   cod: new CodLedger,
   ledger: new CustomerLedger,
+  chat: new ChatStore,
+  prefs: new PrefStore,
+  missStreak: new Map,
   resets: new ResetStore,
   limiter: new RateLimiter,
   demo: true,
@@ -161,7 +164,7 @@ class NeedLogin extends HttpError {
     this.auth = true;
   }
 }
-var D_USERS = 1, D_PROMOS = 2, D_ADDR = 4, D_REVIEWS = 8, D_STATS = 16, D_NOTES = 32, D_AUDIT = 64, D_COMPL = 128, D_COD = 256, D_CONFIG = 512, D_ORDERS = 1024, D_FLEET = 2048, D_LEDGER = 4096, D_CREVIEWS = 8192;
+var D_USERS = 1, D_PROMOS = 2, D_ADDR = 4, D_REVIEWS = 8, D_STATS = 16, D_NOTES = 32, D_AUDIT = 64, D_COMPL = 128, D_COD = 256, D_CONFIG = 512, D_ORDERS = 1024, D_FLEET = 2048, D_LEDGER = 4096, D_CREVIEWS = 8192, D_CHAT = 16384, D_PREFS = 32768;
 var mark = (bits) => {
   S.dirty |= bits;
   ++S.rev;
@@ -500,6 +503,9 @@ function cancelAllowedNow(o) {
     return false;
   return !(isCustomer() && o.status === ASSIGNED && pickedUp(o));
 }
+var TIP_WINDOW = 7 * 86400;
+// Trò chuyện khách <-> shipper mở khi shipper đã nhận đơn và đơn chưa kết thúc
+var chatOpen = (o) => o.shipper >= 0 && !!o.owner && (o.status === ASSIGNED || o.status === FAILED);
 // Phần cước shipper nhận (cùng công thức với lúc ghi nhận đã giao)
 function shipperEarning(o, fee) {
   const part = fee.valid ? shippingPart(fee) : 0;
@@ -577,6 +583,21 @@ function orderRow(o, index, fee, unreachable, carrier) {
       const part = fee.valid ? shippingPart(fee) : 0;
       j.cancelFeeNow = cancelFee(cancelFeeStatus(o), Math.max(0, part - o.loyaltyDiscount - o.promoDiscount), CONFIG);
     }
+  }
+  // Nghiệp vụ kiểu Grab: loại hàng, tiền tip, trò chuyện, shipper yêu thích / bị chặn
+  j.category = o.category || "";
+  j.categoryName = categoryName(o.category || "");
+  {
+    const tip = S.ledger.tipOf(o.id);
+    j.tip = tip ? tip.amount : 0;
+    if (isCustomer() && o.owner === S.me.username)
+      j.canTip = !tip && o.status === DELIVERED && o.shipper >= 0 && CONFIG.tipMax > 0 && (o.deliveredReal === 0 || nowSeconds() - o.deliveredReal <= TIP_WINDOW);
+  }
+  j.chatCount = S.chat.count(o.id);
+  j.chatOpen = chatOpen(o);
+  if (isCustomer() && o.shipper >= 0 && o.shipper < S.shippers.length && o.status !== DISPATCHED) {
+    const nm = S.shippers[o.shipper].name;
+    j.carrierPref = S.prefs.isFavorite(o.owner, nm) ? "fav" : S.prefs.isBlocked(o.owner, nm) ? "block" : "";
   }
   // Mã xác nhận giao: chỉ chủ đơn thấy
   if (isCustomer() && o.owner === S.me.username)
@@ -755,6 +776,9 @@ function configJson() {
     offerSeconds: c.offerSeconds,
     matchGiveUp: c.matchGiveUp,
     clockSpeed: c.clockSpeed,
+    missLimit: c.missLimit,
+    codHoldLimit: c.codHoldLimit,
+    tipMax: c.tipMax,
     tariff: tariffJson()
   };
 }
@@ -776,7 +800,7 @@ function stateJson() {
     ok: true,
     notice,
     badges: badgesJson(),
-    config: { autoDeliver: CONFIG.autoDeliver, scoreAware: CONFIG.scoreAware, maxOpenOrders: CONFIG.maxOpenOrders, autoMatch: CONFIG.autoMatch, offerSeconds: CONFIG.offerSeconds, clockSpeed: CONFIG.clockSpeed, tariff: tariffJson() },
+    config: { autoDeliver: CONFIG.autoDeliver, scoreAware: CONFIG.scoreAware, maxOpenOrders: CONFIG.maxOpenOrders, autoMatch: CONFIG.autoMatch, offerSeconds: CONFIG.offerSeconds, clockSpeed: CONFIG.clockSpeed, tipMax: CONFIG.tipMax, tariff: tariffJson() },
     settings: { shiftStart: S.shiftStart, rush: rushJson() },
     shift: shiftJson(),
     undo: { can: isAdmin() && S.history.canUndo(), label: isAdmin() ? S.history.undoLabel() : "" },
@@ -913,6 +937,10 @@ function flushDirty() {
     writeDataFile("cod_ledger.txt", S.cod.toText());
   if (d & D_LEDGER)
     writeDataFile("customer_ledger.txt", S.ledger.toText());
+  if (d & D_CHAT)
+    writeDataFile("order_chat.txt", S.chat.toText());
+  if (d & D_PREFS)
+    writeDataFile("customer_prefs.txt", S.prefs.toText());
   if (d & D_CONFIG)
     writeDataFile("config.txt", CONFIG.toText());
   if (d & D_FLEET)
@@ -1351,7 +1379,8 @@ POST("shipper/update", (r) => {
     S.accounts.renameLink(oldName, S.shippers[i].name);
     S.stats.rename(oldName, S.shippers[i].name);
     S.cod.renameShipper(oldName, S.shippers[i].name);
-    mark(D_USERS | D_STATS | D_COD);
+    S.prefs.renameShipper(oldName, S.shippers[i].name);
+    mark(D_USERS | D_STATS | D_COD | D_PREFS);
   }
   mark(D_FLEET | D_ORDERS);
   audit("fleet.update", S.shippers[i].name);

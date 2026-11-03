@@ -404,8 +404,8 @@ EDGES ${rows.length}
   return s;
 }
 // Trường tuỳ chọn khoá=giá_trị trong orders.txt (xem src/FileIO.h)
-var ORDER_KEYS = new Set(["cod", "sdt", "nhan", "kh", "ma", "ck", "tv", "gia", "ngay", "tao", "xn", "tt", "sh", "eta", "gx", "lan", "ly", "huy", "bc", "gt", "cu", "dc", "gtri", "bh", "kt", "tra", "hoan", "xong"]);
-var newOrderRecord = () => ({ id: 0, destination: 0, weight: 0, urgent: false, deadline: -1, note: "", cod: 0, phone: "", recipient: "", owner: "", promo: "", promoDiscount: 0, loyaltyDiscount: 0, gross: 0, createdAt: 0, createdBy: "", deliveryCode: "", status: 0, shipperName: "", eta: -1, deliveredAt: -1, attempts: 0, failReason: -1, cancelFee: 0, proofNote: "", deliveredReal: 0, codRecorded: false, address: 0, declaredValue: 0, insuranceFee: 0, dimL: 0, dimW: 0, dimH: 0, receiverPays: false, returnFee: 0, closedAt: 0 });
+var ORDER_KEYS = new Set(["cod", "sdt", "nhan", "kh", "ma", "ck", "tv", "gia", "ngay", "tao", "xn", "tt", "sh", "eta", "gx", "lan", "ly", "huy", "bc", "gt", "cu", "dc", "gtri", "bh", "kt", "tra", "hoan", "xong", "loai"]);
+var newOrderRecord = () => ({ id: 0, destination: 0, weight: 0, urgent: false, deadline: -1, note: "", cod: 0, phone: "", recipient: "", owner: "", promo: "", promoDiscount: 0, loyaltyDiscount: 0, gross: 0, createdAt: 0, createdBy: "", deliveryCode: "", status: 0, shipperName: "", eta: -1, deliveredAt: -1, attempts: 0, failReason: -1, cancelFee: 0, proofNote: "", deliveredReal: 0, codRecorded: false, address: 0, declaredValue: 0, insuranceFee: 0, dimL: 0, dimW: 0, dimH: 0, receiverPays: false, returnFee: 0, closedAt: 0, category: "" });
 function loadOrdersText(text, g = null) {
   const result = [];
   const seen = new Set;
@@ -503,7 +503,11 @@ function loadOrdersText(text, g = null) {
         o.returnFee = number(1e9);
       else if (key === "xong")
         o.closedAt = number(9999999999);
-      else
+      else if (key === "loai") {
+        if (!["tailieu", "thucpham", "quanao", "dientu", "devo", "khac"].includes(val))
+          throw new Error(`${at(l)}loai= phai la tailieu, thucpham, quanao, dientu, devo hoac khac`);
+        o.category = val;
+      } else
         break;
       rest = sp < 0 ? "" : rest.slice(sp + 1).trim();
     }
@@ -593,6 +597,8 @@ function ordersToText(orders) {
       biz += ` hoan=${o.returnFee}`;
     if (o.closedAt)
       biz += ` xong=${o.closedAt}`;
+    if (o.category)
+      biz += ` loai=${o.category}`;
     s += `${o.id} ${o.destination} ${fnum(o.weight)} ${o.urgent ? 1 : 0} ${o.deadline}${biz}${note ? " " + note : ""}
 `;
   }

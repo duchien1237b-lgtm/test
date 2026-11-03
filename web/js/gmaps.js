@@ -299,7 +299,7 @@ export class OsmBase {
     this.mv = mapView;
     this.el = null;
     this.attr = null;
-    this.tiles = new Map();
+    this.tiles = new Map(); this.tileErrors = 0; this.tileLoaded = false;
     this.size = '';
     this.active = false;
     this.geo = null;
@@ -380,6 +380,12 @@ export class OsmBase {
           img.alt = ''; img.draggable = false; img.decoding = 'async'; img.referrerPolicy = 'strict-origin-when-cross-origin';
           img.src = `${OSM_TILE}/${zi}/${((tx % n) + n) % n}/${ty}.png`;
           img.style.cssText = 'position:absolute;width:256px;height:256px;max-width:none;user-select:none';
+          // Ô bản đồ lỗi (mất mạng, bị chặn) thì ẩn đi thay vì hiện biểu tượng ảnh hỏng; lỗi liên tục thì báo một lần
+          img.onerror = () => {
+            img.style.visibility = 'hidden';
+            if (++this.tileErrors === 12 && !this.tileLoaded && this.onNotice) this.onNotice('Không tải được bản đồ OpenStreetMap (mất mạng hoặc bị chặn): vẫn dùng được sơ đồ của đồ án.');
+          };
+          img.onload = () => { this.tileLoaded = true; };
           this.el.append(img);
           this.tiles.set(key, img);
         }

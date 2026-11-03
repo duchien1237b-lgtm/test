@@ -72,6 +72,7 @@ struct OrderRecord {
     bool receiverPays = false;       // tra=1          người nhận trả cước
     long long returnFee = 0;         // hoan=9000      phí hoàn hàng đã tính (chỉ trong orders_live.txt)
     long long closedAt = 0;          // xong=1761600000 lúc hoàn kho / huỷ (giây, chỉ trong orders_live.txt)
+    std::string category;            // loai=devo      loại hàng: tailieu thucpham quanao dientu devo khac
 };
 const long long MAX_COD = 50000000;   // thu hộ tối đa 50 triệu đồng / đơn
 bool validPhone(const std::string& s);  // 10 chữ số, bắt đầu bằng 0

@@ -12,6 +12,7 @@ import {
   pager, bindPager, debounce, normalizePhone, preserveFocus, statusChip, askReason, avatar, pickedUp, liveClock,
 } from '../ui.js';
 import { openOrder, redeliverDialog, returnDialog } from '../orders.js';
+import { categoryFields, bindCategory, chatButton, prefButtons, bindGrabx, shareCodeButton } from '../grabx.js';
 
 let ctx, root;
 let showForm = false, dest = null, selected = null, group = 'all', q = '', sort = 'id:desc', page = 1;
@@ -118,6 +119,7 @@ function formHtml(st) {
       <label class="field"><span>Khối lượng (kg)${maxKg ? ` <small class="muted">tối đa ${maxKg}</small>` : ''}</span><input name="weight" type="number" step="0.1" min="0.1"${maxKg ? ` max="${maxKg}"` : ''} value="${val('weight', '1')}" inputmode="decimal" required></label>
       <label class="field"><span>Giao trước (không bắt buộc)</span><input name="deadline" type="time" value="${dl}"></label>
     </div>
+    ${categoryFields(pre ? pre.category : '')}
     <fieldset class="dims-row"><legend>Kích thước kiện, cm <small class="muted">(không bắt buộc; hàng cồng kềnh tính theo cân quy đổi)</small></legend>
       <input name="length" type="number" min="1" max="300" step="1" inputmode="numeric" placeholder="Dài" aria-label="Dài (cm)" value="${escapeHtml(dims[0] || '')}">
       <span>×</span><input name="width" type="number" min="1" max="300" step="1" inputmode="numeric" placeholder="Rộng" aria-label="Rộng (cm)" value="${escapeHtml(dims[1] || '')}">
@@ -145,12 +147,12 @@ function cardHtml(o) {
   const finding = searching(o);
   return `<article class="order-card ${o.id === selected ? 'sel' : ''}" data-id="${o.id}" data-node="${o.destination}">
     <header><b>Đơn ${o.id} · ${escapeHtml(o.recipient || o.destinationName)}</b>${statusChip(o)}</header>
-    <p>${escapeHtml(o.destinationName)} · ${fmt.num(o.weight)} kg${o.urgent ? ' · hoả tốc' : ''} · cước <b>${money(o.total)}</b>${o.insurance ? ' <small class="muted">(gồm bảo hiểm)</small>' : ''}${o.receiverPays ? ' <small class="chip">người nhận trả</small>' : ''}${o.promo ? ` <small class="chip ok">${escapeHtml(o.promo)}</small>` : ''}${o.cod ? ` · thu hộ ${money(o.cod)}` : ''}${o.returnFee ? ` · phí hoàn ${money(o.returnFee)}` : ''}</p>
+    <p>${escapeHtml(o.destinationName)} · ${o.categoryName ? `${escapeHtml(o.categoryName)} · ` : ''}${fmt.num(o.weight)} kg${o.urgent ? ' · hoả tốc' : ''} · cước <b>${money(o.total)}</b>${o.insurance ? ' <small class="muted">(gồm bảo hiểm)</small>' : ''}${o.receiverPays ? ' <small class="chip">người nhận trả</small>' : ''}${o.promo ? ` <small class="chip ok">${escapeHtml(o.promo)}</small>` : ''}${o.cod ? ` · thu hộ ${money(o.cod)}` : ''}${o.returnFee ? ` · phí hoàn ${money(o.returnFee)}` : ''}</p>
     <p><b data-status-text="${o.id}">${escapeHtml(statusText(o))}</b>${o.failReasonName && o.status !== 2 ? ` · <span class="bad">${escapeHtml(o.failReasonName)}</span>` : ''}</p>
     ${finding ? '<div class="finding"><span class="radar" aria-hidden="true"><i></i><i></i><i></i></span><div><b>Đang tìm shipper gần bạn nhất</b><small>Hệ thống gửi đơn cho shipper gần kho nhất. Họ không nhận thì chuyển người kế tiếp.</small></div></div>' : ''}
     ${o.status === 0 && o.noShipper ? '<div class="finding none"><div><b>Chưa có shipper nhận đơn</b><small>Tất cả shipper phù hợp đang bận hoặc đã bỏ qua. Bạn có thể tìm lại hoặc huỷ đơn (không mất phí).</small></div></div>' : ''}
     ${carrierCard(o)}
-    ${active && o.code ? `<div class="code-inline">Mã nhận hàng <b>${escapeHtml(o.code)}</b> <small>đọc cho shipper khi nhận hàng</small></div>` : ''}
+    ${active && o.code ? `<div class="code-row"><div class="code-inline">Mã nhận hàng <b>${escapeHtml(o.code)}</b> <small>người nhận đọc cho shipper khi nhận hàng</small></div>${shareCodeButton(o)}</div>` : ''}
     <div class="timeline">${[1, 2, 3, 4].map((k) => `<i class="${bad ? (k === 1 ? 'on' : 'bad') : k <= step ? 'on' : ''}"></i>`).join('')}</div>
     <div class="timeline-labels"><span>Đặt đơn</span><span>${autoMatch() ? 'Tìm shipper' : 'Xác nhận'}</span><span>Đang giao</span><span>${bad ? escapeHtml(o.statusName) : 'Đã giao'}</span></div>
     <div class="actions card-acts">
@@ -160,6 +162,9 @@ function cardHtml(o) {
       ${o.status === 6 || (o.status === 0 && autoMatch()) ? `<button class="btn small ghost" data-edit="${o.id}">Sửa đơn</button>` : ''}
       ${o.status === 3 ? `<button class="btn small" data-redeliver="${o.id}">Hẹn giao lại</button><button class="btn small ghost" data-return="${o.id}">Hoàn hàng</button>` : ''}
       ${o.status === 2 && !o.rated ? `<button class="btn small" data-open="${o.id}">Đánh giá ★</button>` : ''}
+      ${chatButton(o)}
+      ${o.canTip ? `<button class="btn small" data-tipo="${o.id}">Tip shipper</button>` : o.tip ? `<small class="chip ok">Đã tip ${money(o.tip)}</small>` : ''}
+      ${o.status === 2 || o.status === 5 ? prefButtons(o) : ''}
       ${o.status === 2 || o.status === 4 || o.status === 5 ? `<button class="btn small ghost" data-again="${o.id}">Đặt lại</button>` : ''}
     </div>
   </article>`;
@@ -237,6 +242,7 @@ function bindList() {
   for (const b of root.querySelectorAll('[data-redeliver]')) b.addEventListener('click', () => { const o = findListed(Number(b.dataset.redeliver)); if (o) redeliverDialog(o, ctx.store); });
   for (const b of root.querySelectorAll('[data-return]')) b.addEventListener('click', () => { const o = findListed(Number(b.dataset.return)); if (o) returnDialog(o, ctx.store); });
   for (const b of root.querySelectorAll('[data-cancel]')) b.addEventListener('click', () => { const o = findListed(Number(b.dataset.cancel)); if (o) cancelDialog(o); });
+  bindGrabx($('#m-listwrap', root), ctx.store, findListed);
   for (const b of root.querySelectorAll('[data-retry]')) b.addEventListener('click', () => guard(async () => {
     try { const res = await ctx.store.mutate('order/retry', { id: b.dataset.retry }); toast(res.message); }
     catch (e) { if (e.status !== 409) throw e; await ctx.store.refresh(); toast('Đơn của bạn đã được hệ thống gửi cho shipper'); }   // đơn vừa được ghép trong lúc trang chưa kịp cập nhật
@@ -262,7 +268,7 @@ function drawMap(st) {
       if (tr.approach && tr.approach.length > 1) paths.push({ nodes: tr.approach, color, width: 4, opacity: 0.6, dash: '6 6', animate: false, arrows: true, geo: true, vehicle: tr.vehicleName });
       paths.push({ nodes: tr.path, color, width: 5, opacity: 0.5, animate: false, arrows: true, geo: true, vehicle: tr.vehicleName });
       const pos = tripPosition(tr, liveClock(st), ctx.store.nodesById);
-      if (pos) markers.push({ lat: pos.lat, lon: pos.lon, color, label: (tr.name.trim().split(/\s+/).pop() || '?')[0].toUpperCase(), title: `Shipper ${tr.name}` });
+      if (pos) markers.push({ lat: pos.lat, lon: pos.lon, along: pos.along, color, label: (tr.name.trim().split(/\s+/).pop() || '?')[0].toUpperCase(), title: `Shipper ${tr.name}` });
     }
   } else if (focus && (focus.status === 0 || focus.status === 7) && !focus.noShipper) {
     const dep = ctx.store.nodesById.get(st.depot);
@@ -316,6 +322,7 @@ function bindForm() {
   for (const el of [f.weight, f.cod, f.promo, f.value, f.length, f.width, f.height]) el.addEventListener('input', debQuote);
   f.destination.addEventListener('change', () => { dest = f.destination.value === '' ? null : Number(f.destination.value); drawMap(ctx.store.state); });
   dest = Number(destOf()) || null;
+  bindCategory(f);
   quote();
   $('#m-cancel', root).addEventListener('click', () => { showForm = false; dest = null; editing = prefill = null; ctx.map.setHint(null); render(); });
   f.addEventListener('submit', (e) => {
@@ -325,7 +332,10 @@ function bindForm() {
       deadline = timeToMinutes(f.deadline.value) - getShiftStart();
       if (deadline < 0) { toast(`Giờ giao phải sau giờ bắt đầu ca (${hhmm(getShiftStart())})`, 'error'); return; }
     }
-    const params = { weight: f.weight.value, urgent: f.urgent.checked ? 1 : 0, deadline, cod: f.cod.value || 0, note: f.note.value.trim(), ...billingParams() };
+    if (!f.category.value) { toast('Hãy chọn loại hàng', 'error'); f.category.focus(); return; }
+    const catChanged = !editing || f.category.value !== (editing.category || 'khac');
+    if (catChanged && !f.pledge.checked) { toast('Hãy xác nhận hàng gửi không thuộc danh mục cấm', 'error'); f.pledge.focus(); return; }
+    const params = { weight: f.weight.value, urgent: f.urgent.checked ? 1 : 0, deadline, cod: f.cod.value || 0, note: f.note.value.trim(), category: f.category.value, pledge: f.pledge.checked ? 1 : 0, ...billingParams() };
     if (!editing) params.promo = f.promo.value.trim();
     if (f.address && f.address.value !== '0') params.address = f.address.value;
     else Object.assign(params, { destination: f.destination.value, recipient: f.recipient.value.trim(), phone: normalizePhone(f.phone.value) });

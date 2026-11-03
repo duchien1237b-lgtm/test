@@ -68,6 +68,8 @@ function init() {
   loadOptional("complaints.txt", (t) => S.complaints.loadText(t));
   loadOptional("cod_ledger.txt", (t) => S.cod.loadText(t));
   loadOptional("customer_ledger.txt", (t) => S.ledger.loadText(t));
+  loadOptional("order_chat.txt", (t) => S.chat.loadText(t));
+  loadOptional("customer_prefs.txt", (t) => S.prefs.loadText(t));
   try {
     const t = fileText("shippers.txt");
     if (t == null)

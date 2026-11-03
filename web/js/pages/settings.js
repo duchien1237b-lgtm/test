@@ -67,6 +67,12 @@ function configForm() {
       ${num('matchGiveUp', 'Tự huỷ khi không có shipper sau', cfg.matchGiveUp ?? 10, { min: 0, suffix: 'phút', hint: '0 = không tự huỷ; tối đa 240' })}
       ${num('clockSpeed', 'Tốc độ giờ ca', cfg.clockSpeed ?? 6, { step: 0.5, min: 0, suffix: '×', hint: 'Số phút ca trôi qua mỗi phút thật; 0 = đứng yên, tối đa 120' })}
     </div>
+    <h2 style="margin-top:14px">Quy tắc shipper &amp; khách (kiểu Grab)</h2>
+    <div class="grid-3">
+      ${num('missLimit', 'Tự tạm nghỉ sau khi bỏ lỡ', cfg.missLimit ?? 3, { min: 0, suffix: 'lời mời', hint: 'Bỏ qua / hết giờ liên tiếp; 0 = tắt, tối đa 20' })}
+      ${num('codHoldLimit', 'Hạn mức tiền mặt shipper giữ', cfg.codHoldLimit ?? 5000000, { min: 0, step: 100000, suffix: 'đ', hint: 'Vượt mức thì không nhận đơn thu tiền tới khi nộp; 0 = không chặn' })}
+      ${num('tipMax', 'Tiền tip tối đa mỗi đơn', cfg.tipMax ?? 200000, { min: 0, step: 1000, suffix: 'đ', hint: 'Bội số 1.000 đ; 0 = tắt tip' })}
+    </div>
     </section>
     <section class="cfg-sec" data-sec="tier" ${tab === 'tier' ? '' : 'hidden'}>
     <h2>Hạng thành viên</h2>
@@ -153,7 +159,7 @@ function bind() {
           cancelOnRoute: v('cancelOnRoute') / 100, shipperShare: v('shipperShare') / 100, maxOpenOrders: v('maxOpenOrders'),
           insRate: v('insRate') / 100, insThreshold: v('insThreshold'), volDivisor: v('volDivisor'), compMultiplier: v('compMultiplier'), debtLimit: v('debtLimit'),
           scoreAware: f.scoreAware.checked ? 1 : 0, autoMatch: f.autoMatch.checked ? 1 : 0,
-          offerSeconds: v('offerSeconds'), matchGiveUp: v('matchGiveUp'), clockSpeed: v('clockSpeed'), autoDeliver: f.autoDeliver.checked ? 1 : 0, tiers,
+          offerSeconds: v('offerSeconds'), matchGiveUp: v('matchGiveUp'), clockSpeed: v('clockSpeed'), missLimit: v('missLimit'), codHoldLimit: v('codHoldLimit'), tipMax: v('tipMax'), autoDeliver: f.autoDeliver.checked ? 1 : 0, tiers,
         });
         cfg = res;
         toast(res.message);

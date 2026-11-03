@@ -326,6 +326,32 @@ export class MapView {
     return e.pts.slice(a, b + 1).map(([la, lo]) => this.project({ x: la, y: lo }));
   }
 
+  // Vị trí shipper bám theo đường thật (OSM/OSRM hoặc Google) đã vẽ: along = {nodes, i, f, vehicle} nghĩa là đang ở
+  // tỉ lệ f của đoạn nodes[i] → nodes[i+1]. Chưa có đường thật (đang tải, sơ đồ) thì trả null để dùng toạ độ nội suy thẳng.
+  _alongPoint(al) {
+    if (!al || !this.geo || !al.nodes || al.i < 0 || al.i + 1 >= al.nodes.length) return null;
+    const coords = al.nodes.map((id) => this.byId.get(id)).map((n) => (n ? [n.x, n.y] : null));
+    if (coords.some((c) => !c)) return null;
+    const e = this.geo.peek(coords, al.vehicle);
+    if (!e || !e.idx || !e.pts) { if (!e) this.geo.want(coords, al.vehicle); return null; }
+    const a = e.idx[al.i], b = e.idx[al.i + 1];
+    if (a == null || b == null || b < a) return null;
+    const seg = e.pts.slice(a, b + 1);
+    if (seg.length < 2) return seg[0] || null;
+    // độ dài từng đoạn nhỏ (xấp xỉ phẳng, đủ chính xác trong vài km)
+    const k = Math.cos((seg[0][0] * Math.PI) / 180);
+    const d = [0];
+    for (let j = 1; j < seg.length; j++) d.push(d[j - 1] + Math.hypot(seg[j][0] - seg[j - 1][0], (seg[j][1] - seg[j - 1][1]) * k));
+    const want = d[d.length - 1] * Math.min(1, Math.max(0, al.f));
+    for (let j = 1; j < seg.length; j++) {
+      if (d[j] >= want) {
+        const t = d[j] > d[j - 1] ? (want - d[j - 1]) / (d[j] - d[j - 1]) : 0;
+        return [seg[j - 1][0] + (seg[j][0] - seg[j - 1][0]) * t, seg[j - 1][1] + (seg[j][1] - seg[j - 1][1]) * t];
+      }
+    }
+    return seg[seg.length - 1];
+  }
+
   _draw() {
     if (!this.view) this.fitMain();
     const { w, h } = this._size();
@@ -489,7 +515,8 @@ export class MapView {
     // Biểu tượng shipper đang di chuyển
     const mk = [];
     for (const m of this.markers) {
-      const [mx, my] = this.project({ x: m.lat, y: m.lon });
+      const g = this._alongPoint(m.along);
+      const [mx, my] = this.project(g ? { x: g[0], y: g[1] } : { x: m.lat, y: m.lon });
       mk.push(`<g class="marker" transform="translate(${mx.toFixed(1)},${my.toFixed(1)})" style="--c:${m.color}"><title>${escapeHtml(m.title || '')}</title><circle class="halo" r="22"/><path class="tail" d="M-6 9 0 19 6 9z"/><circle class="face" r="14"/><text>${escapeHtml(m.label || '')}</text></g>`);
     }
     parts.push(`<g>${mk.join('')}</g>`);

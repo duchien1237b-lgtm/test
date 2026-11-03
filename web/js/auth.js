@@ -21,9 +21,15 @@ const BRAND_SVG = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 22.5 
 
 let el, onLogin, info = null, view = 'login', tool = 'quote', flash = null, resetEmail = '', lastUser = '';
 
+// Liên kết người gửi chia sẻ cho người nhận: ?don=112 mở sẵn thẻ *Tra cứu đơn* với mã đơn đã điền
+let trackPrefill = '';
 export function initAuth(opts) {
   el = $('#login');
   onLogin = opts.onLogin;
+  try {
+    const d = new URLSearchParams(location.search).get('don');
+    if (d && /^\d{1,9}$/.test(d)) { trackPrefill = d; tool = 'track'; }
+  } catch { /* trình duyệt cũ */ }
 }
 
 export async function showAuth(message, kind = 'error') {
@@ -116,9 +122,10 @@ function quoteHtml() {
 function trackHtml() {
   return `<form id="g-track" class="g-form" novalidate>
     <div class="row">
-      <label class="field"><span>Mã đơn</span><input name="code" inputmode="numeric" maxlength="9" placeholder="vd: 101" required></label>
+      <label class="field"><span>Mã đơn</span><input name="code" inputmode="numeric" maxlength="9" placeholder="vd: 101" value="${escapeHtml(trackPrefill)}" required></label>
       <label class="field"><span>SĐT người nhận</span><input name="phone" type="tel" inputmode="numeric" maxlength="13" placeholder="09xxxxxxxx" required></label>
     </div>
+    <p class="muted small" style="margin:-2px 0 10px">Bạn là người nhận? Nhập mã đơn và số điện thoại của bạn để xem đơn và <b>mã nhận hàng</b> (hiện khi shipper đang giao tới).</p>
     <button class="btn primary">Tra cứu</button>
     <div id="g-track-out" class="g-out" aria-live="polite"></div>
   </form>`;
@@ -157,7 +164,8 @@ function bindTrack() {
         const r = await api.get('track', { code: f.code.value.trim(), phone: normalizePhone(f.phone.value) });
         const o = r.order;
         out.innerHTML = `<div class="track-box"><header><b>Đơn ${o.id}</b><span class="chip ${o.status === 2 ? 'ok' : o.status === 4 || o.status === 5 ? 'warn' : 'blue'}">${escapeHtml(o.statusName)}</span></header>
-          <p>Giao tới ${escapeHtml(o.destination)}${o.urgent ? ' · hoả tốc' : ''}${o.carrier ? ` · shipper ${escapeHtml(o.carrier)}` : ''}${o.cod ? ` · thu hộ ${money(o.cod)}` : ''}</p>
+          <p>Giao tới ${escapeHtml(o.destination)}${o.urgent ? ' · hoả tốc' : ''}${o.carrier ? ` · shipper ${escapeHtml(o.carrier)}` : ''}${o.collect && o.status !== 2 ? ` · cần trả shipper ${money(o.collect)}` : ''}</p>
+          ${o.code ? `<div class="code-box" style="margin:10px 0"><span>Mã nhận hàng của bạn</span><b>${escapeHtml(o.code)}</b><small>Đọc mã này cho shipper khi nhận hàng. Không đọc mã nếu chưa nhận được hàng.</small></div>` : (o.status === 2 || o.status === 4 || o.status === 5 ? '' : '<p class="muted small">Mã nhận hàng sẽ hiện ở đây khi shipper nhận đơn và bắt đầu giao.</p>')}
           <ol class="steps">${r.steps.map((s) => `<li>${escapeHtml(EVENT_LABEL[s.type] || s.type)}${s.t != null ? ` <small>phút ${Math.round(s.t)} của ca</small>` : ''}</li>`).join('')}</ol></div>`;
       } catch (err) { out.innerHTML = `<p class="field-err" role="alert">${escapeHtml(err.message)}</p>`; }
     }, f.querySelector('button'));

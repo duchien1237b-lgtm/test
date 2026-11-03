@@ -6,6 +6,7 @@ import { store, escapeHtml } from './store.js';
 import {
   $, fmt, money, when, guard, guardForm, toast, showModal, statusChip, askReason, confirmBox, pickFailReason, EVENT_LABEL,
 } from './ui.js';
+import { chatButton, prefButtons, chatDialog, tipDialog, setPref, shareCodeDialog } from './grabx.js';
 
 const role = () => (store.state && store.state.me ? store.state.me.role : '');
 const isStaff = () => role() === 'admin';
@@ -157,16 +158,21 @@ export async function openOrder(id, { go } = {}) {
     if (o.cancelFeeNow !== undefined) acts.push(`<button type="button" class="btn small ghost danger" data-act="cancel">Huỷ đơn${o.cancelFeeNow ? ` (phí ${money(o.cancelFeeNow)})` : ''}</button>`);
   }
   if (r === 'shipper' && o.status === 1) acts.push('<button type="button" class="btn small primary" data-act="deliver">Đã giao</button><button type="button" class="btn small ghost danger" data-act="fail">Giao thất bại</button>');
+  acts.push(chatButton(o));
+  if (r === 'customer' && o.canTip) acts.push('<button type="button" class="btn small" data-act="tip">Tip shipper</button>');
+  if (r === 'customer' && (o.status === 2 || o.status === 5)) acts.push(prefButtons(o));
   acts.push('<button type="button" class="btn small ghost" data-act="print">In hoá đơn</button>');
 
   const showCode = r === 'customer' && o.code && [6, 0, 7, 1, 3].includes(o.status);
   showModal(`Đơn ${o.id}`, `<div class="od">
     <div class="od-head">${statusChip(o)}${o.urgent ? ' <span class="chip urgent">Hoả tốc</span>' : ''}<span class="muted small">Đặt ${when.full(o.createdAt)}</span></div>
-    ${showCode ? `<div class="code-box"><span>Mã nhận hàng</span><b>${escapeHtml(o.code)}</b><small>Đọc mã này cho shipper khi nhận hàng. Không chia sẻ trước.</small></div>` : ''}
+    ${showCode ? `<div class="code-box"><span>Mã nhận hàng</span><b>${escapeHtml(o.code)}</b><small>Người nhận đọc mã này cho shipper khi nhận hàng. Đặt hộ người khác thì bấm <button type="button" class="link" data-act="sharecode">Gửi mã cho người nhận</button>.</small></div>` : ''}
     <dl class="od-grid">
       <dt>Giao tới</dt><dd>${escapeHtml(o.destinationName)}</dd>
       <dt>Người nhận</dt><dd>${escapeHtml(o.recipient || '–')}${o.phone ? ` · <a href="tel:${escapeHtml(o.phone)}">${escapeHtml(o.phone)}</a>` : ''}</dd>
       <dt>Hàng</dt><dd>${fmt.num(o.weight)} kg${o.dims ? ` · ${escapeHtml(o.dims)} cm` : ''}${o.chargedWeight > o.weight ? ` <small class="muted">(tính cước ${fmt.num(o.chargedWeight)} kg)</small>` : ''}${o.note ? ` · ${escapeHtml(o.note)}` : ''}</dd>
+      ${o.categoryName ? `<dt>Loại hàng</dt><dd>${escapeHtml(o.categoryName)}</dd>` : ''}
+      ${o.tip ? `<dt>Tiền tip</dt><dd>${money(o.tip)} <small class="muted">(shipper nhận 100%)</small></dd>` : ''}
       ${o.value ? `<dt>Khai giá</dt><dd>${money(o.value)}${o.insurance ? ` · bảo hiểm ${money(o.insurance)}` : ' <small class="muted">(miễn phí bảo hiểm)</small>'}</dd>` : ''}
       ${o.receiverPays ? `<dt>Trả cước</dt><dd>Người nhận trả ${money(o.total)} khi nhận</dd>` : ''}
       ${o.deadline >= 0 ? `<dt>Hạn giao</dt><dd>${fmt.clock(o.deadline)}</dd>` : ''}
@@ -194,10 +200,14 @@ export async function openOrder(id, { go } = {}) {
   const body = $('#modal-body');
   const close = () => $('#modal').close();
   const run = (fn, btn) => guard(async () => { const out = await fn(); if (out && out.message) toast(out.message); close(); }, btn);
+  for (const b of body.querySelectorAll('[data-chat]')) b.addEventListener('click', () => chatDialog(o.id, store));
+  for (const b of body.querySelectorAll('[data-pref]')) b.addEventListener('click', async () => { if (await setPref(b.dataset.name, b.dataset.pref, store)) close(); });
   for (const b of body.querySelectorAll('[data-act]')) {
     b.addEventListener('click', async () => {
       const a = b.dataset.act;
       if (a === 'print') { printInvoice(inv); return; }
+      if (a === 'tip') { tipDialog(o, store, o.carrierInfo ? o.carrierInfo.name : ''); return; }
+      if (a === 'sharecode') { shareCodeDialog(o); return; }
       if (a === 'complain') { close(); if (go) go('complaints', { order: o.id }); return; }
       if (a === 'confirm') return run(() => store.mutate('order/confirm', { id: o.id }), b);
       if (a === 'retry') return run(() => store.mutate('order/retry', { id: o.id }), b);
