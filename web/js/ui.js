@@ -107,7 +107,8 @@ export function maxCapacity(state) {
 
 export function toast(message, kind = 'info') {
   const el = document.createElement('div');
-  el.className = `toast ${kind === 'error' ? 'error' : ''}`;
+  el.className = `toast ${kind === 'error' ? 'error' : kind === 'warn' ? 'warn' : ''}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
   el.textContent = message;
   $('#toasts').append(el);
   const life = kind === 'error' ? 6000 : 3200;

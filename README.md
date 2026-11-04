@@ -17,7 +17,7 @@ Không muốn biên dịch? Mở thẳng **`dieu-phoi-giao-hang.html`** bằng t
 
 Bản đồ chính là **Google Maps** (nền thật, đường đi thật, tìm đường ngắn nhất trên Google): bấm nút quả cầu trên bản đồ và dán khoá API của bạn, xem [Tích hợp Google Maps](#tích-hợp-google-maps). Không có khoá thì tự dùng sơ đồ và thuật toán của đồ án.
 
-Tài khoản dùng thử: `admin` / `admin123` (quản trị viên), `tuan` / `shipper123` (shipper), `anphat` / `khach123` (khách hàng). Bảng đầy đủ ở [Cài đặt và chạy](#cài-đặt-và-chạy). Để xem ghép đơn kiểu Grab, mở 2 cửa sổ ẩn danh: một khách đặt đơn, một shipper `tuan` bấm *Nhận đơn*.
+Tài khoản mẫu (gõ tay ở trang đăng nhập, không còn nút bấm sẵn): `admin` / `admin123` (quản trị viên), `tuan` / `shipper123` (shipper), `anphat` / `khach123` (khách hàng). Bảng đầy đủ ở [Cài đặt và chạy](#cài-đặt-và-chạy). Để xem ghép đơn kiểu Grab, mở 2 cửa sổ ẩn danh: một khách đặt đơn, một shipper `tuan` bấm *Nhận đơn*.
 
 > Bài tập lớn môn **Cấu trúc dữ liệu & Giải thuật**, **Đề tài 08**: *Hệ thống Tìm đường & Điều phối Giao hàng Tối ưu*.
 > Cấu trúc dữ liệu chính: **đồ thị có trọng số** (danh sách kề), **Min-Heap tự cài**, **ngăn xếp** (hoàn tác), **cây Trie** (tìm kiếm). Thuật toán: **Dijkstra** (3 phiên bản), **A\***, **BFS/DFS**, **Bellman-Ford**, **Yen (K tuyến ngắn nhất)**, **TSP bitmask**, **tìm kiếm cục bộ** (relocate, 2-opt) cho điều phối, **Dijkstra phụ thuộc thời gian** (giờ cao điểm).
@@ -50,6 +50,8 @@ Phiên bản này nâng phần tài khoản lên như một **website giao hàng
 - [REST API](#rest-api)
 - [Kiểm thử](#kiểm-thử)
 - [Tích hợp Google Maps](#tích-hợp-google-maps)
+- [Thiết kế lại (v14)](#thiết-kế-lại-v14)
+- [Hoàn thiện giao diện và bản đồ (v13)](#hoàn-thiện-giao-diện-và-bản-đồ-v13)
 - [Kiểm tra toàn diện (v12.2)](#kiểm-tra-toàn-diện-v122)
 - [Bản một file HTML](#bản-một-file-html)
 - [Thay đổi so với bản gốc](#thay-đổi-so-với-bản-gốc)
@@ -142,7 +144,7 @@ Ngoài web còn có **menu dòng lệnh** (`delivery --console`) với đủ ch�
 | ![](docs/screenshots/01-guest-landing.png) | ![](docs/screenshots/03-register-validation.png) |
 | **Đăng ký shipper (loại xe, tải trọng, biển số)** | **Shipper chờ duyệt đăng nhập: thông báo rõ ràng** |
 | ![](docs/screenshots/06-register-shipper.png) | ![](docs/screenshots/07-login-pending-shipper.png) |
-| **Đăng nhập: tên / email / SĐT, ghi nhớ, tài khoản dùng thử** | **Khách tạo đơn: COD, mã giảm giá, báo giá = hoá đơn** |
+| **Đăng nhập: tên / email / SĐT, ghi nhớ** | **Khách tạo đơn: COD, mã giảm giá, báo giá = hoá đơn** |
 | ![](docs/screenshots/08-login.png) | ![](docs/screenshots/09-customer-create-order.png) |
 | **Quản trị viên (chế độ thủ công): hàng đơn mới chờ xác nhận** | **Quản trị viên: so sánh phương án, áp dụng** |
 | ![](docs/screenshots/11-admin-queue.png) | ![](docs/screenshots/12-admin-plan.png) |
@@ -325,7 +327,7 @@ g++ -std=c++17 -O2 -Isrc -Ithird_party -D_WIN32_WINNT=0x0A00 src/*.cpp -o delive
 ./delivery --no-demo          # tắt chế độ demo: không có hộp thư giả lập (mã OTP chỉ in ra nhật ký server)
 ```
 
-Mở trình duyệt sẽ thấy **trang giới thiệu cho khách vãng lai** (báo giá thử, tra cứu đơn) và nút **Đăng nhập / Đăng ký**. Tài khoản dùng thử (bấm thẳng vào nút ở màn đăng nhập cũng được):
+Mở trình duyệt sẽ thấy **trang giới thiệu cho khách vãng lai** (báo giá thử, tra cứu đơn) và nút **Đăng nhập / Đăng ký**. Tài khoản mẫu (gõ tay vào ô đăng nhập):
 
 | Vai trò | Tên đăng nhập | Mật khẩu | Vào thẳng trang |
 |---|---|---|---|
@@ -1186,6 +1188,27 @@ Nói cách khác: *đường vẽ và ETA tham khảo* lấy từ Google, còn *
 
 **Liên kết "Mở trong Google Maps" (không cần khoá).** Trang **Chuyến của tôi**: mỗi điểm đang giao có nút **Dẫn đường** (hoặc **Chỉ đường tới kho** khi chưa lấy hàng), và **Dẫn đường cả chuyến** khi còn từ 2 điểm; xuất phát từ vị trí hiện tại của điện thoại. Trang **Theo dõi**: mỗi chuyến có nút **Google Maps** mở kho rồi các điểm theo thứ tự (tối đa 9 điểm trung gian).
 
+## Thiết kế lại (v14)
+
+Một dải màu thương hiệu duy nhất **xanh ngọc → xanh mòng két → xanh biển** dùng cho mọi điểm nhấn (logo, nút chính, mục đang chọn ở thanh dưới, gạch dưới tiêu đề trang, ô số liệu đầu tiên, tiến trình đơn); mọi bề mặt còn lại trung tính. Thẻ trắng không viền với đổ bóng mềm nhiều lớp, ô số liệu có chấm màu theo ý nghĩa (xanh lá / vàng / xanh dương / tím), **thẻ hạng thành viên kiểu thẻ ngân hàng**, thẻ đơn có **sọc màu theo trạng thái** ở mép trái, tiêu đề trang chào có chữ dải màu, sơ đồ có lưới chấm rất nhạt. Chữ số dùng độ rộng đều (`tnum`) nên tiền và giờ không nhảy khi cập nhật. Vẫn là CSS thuần (một lớp `v14` ở cuối `style.css`), không đổi HTML ngoài một thẻ `<span>` ở tiêu đề, không đổi API.
+
+| Trang đăng nhập | Đơn của tôi (khách) |
+|---|---|
+| ![](docs/screenshots/102-thiet-ke-v14-dang-nhap.png) | ![](docs/screenshots/103-thiet-ke-v14-don-cua-toi.png) |
+| **Tổng quan (quản trị)** | **Chế độ tối** |
+| ![](docs/screenshots/104-thiet-ke-v14-tong-quan.png) | ![](docs/screenshots/105-thiet-ke-v14-che-do-toi.png) |
+
+## Hoàn thiện giao diện và bản đồ (v13)
+
+- **Trang đăng nhập không còn nút "Tài khoản dùng thử"**: mọi người tự gõ tên đăng nhập / email / SĐT và mật khẩu; hệ thống tự đưa vào trang đúng vai trò (khách hàng, shipper, quản trị). Thay vào chỗ đó là thẻ giới thiệu ba vai trò (không bấm được, không lộ mật khẩu) và **cảnh báo Caps Lock** khi gõ mật khẩu. Tài khoản mẫu vẫn có trong dữ liệu (bảng ở mục *Cài đặt và chạy*).
+- **Trang chào**: ba điểm nhấn tính năng có biểu tượng, nền chấm lưới nhẹ, số liệu "0 đơn đã giao" được thay bằng "24/7 đặt đơn trực tuyến" khi chưa có đơn, chân trang ghi công OpenStreetMap.
+- **Toàn ứng dụng**: nút có phản hồi khi bấm và đổi màu khi rê chuột, nút bị khoá mờ rõ ràng, thẻ đơn nổi nhẹ khi rê chuột, trạng thái rỗng có khung và biểu tượng, thông báo lỗi bản đồ nền dùng màu cảnh báo (vàng) và chỉ hiện một lần mỗi phiên.
+- **OpenStreetMap / OSRM chạy ổn định hơn**: máy chủ OSRM công cộng chỉ cho khoảng **1 yêu cầu mỗi giây**; bản cũ gửi 3 yêu cầu cùng lúc nên dễ bị từ chối (HTTP 429) rồi quay về vẽ đường thẳng. Nay gửi **lần lượt, cách nhau ≥ 1,1 giây**, gặp 429 thì chờ và thử lại (tối đa 3 lần, không tính là máy chủ hỏng), và **nhớ đường đã tìm** trong trình duyệt (80 tuyến gần nhất) nên mở lại trang không phải hỏi lại. Kiểm thử với máy chủ giả có giới hạn 1 yêu cầu/giây: 3 chuyến cùng lúc vẽ đủ đường thật, không báo lỗi; tải lại trang: 0 yêu cầu mới.
+
+| Trang đăng nhập (máy tính) | Trang đăng nhập (điện thoại) |
+|---|---|
+| ![](docs/screenshots/100-dang-nhap-v13.png) | ![](docs/screenshots/101-dang-nhap-v13-dien-thoai.png) |
+
 ## Kiểm tra toàn diện (v12.2)
 
 Bản này được rà soát bằng ba cách, có thể chạy lại bằng các script Playwright / Node trong lúc phát triển:
@@ -1425,3 +1448,6 @@ Yêu cầu nâng cấp có một số điểm chưa nói rõ; dưới đây là 
 80. **Mã nhận hàng cho người nhận**: tra cứu công khai (mã đơn + đúng SĐT người nhận trên đơn) trả thêm mã khi đơn *Đang giao* (shipper đã nhận) hoặc *Thất bại* chờ giao lại; trước khi có shipper nhận, sau khi giao / huỷ / hoàn thì không hiện. Tra cứu vẫn giới hạn 20 lần / 10 phút mỗi IP để không dò được SĐT. Đơn không có SĐT người nhận thì chỉ người gửi chuyển mã được (giao diện nhắc điều này). Không gửi SMS thật: nút *Gửi SMS* mở ứng dụng nhắn tin của điện thoại với nội dung soạn sẵn.
 81. **Shipper chạy theo đường thật**: vị trí vẫn do đồng hồ ca và lộ trình của đồ án quyết định (tỉ lệ quãng đã đi trên mỗi cạnh của đồ thị); giao diện chỉ đặt điểm đó lên đường OSRM / Google tương ứng theo cùng tỉ lệ độ dài. Chưa tải xong đường thật hoặc đang ở nền sơ đồ thì xe chạy thẳng như trước.
 82. **Rà soát v12.2** dùng dữ liệu mẫu và đường OpenStreetMap / OSRM giả (máy kiểm tra không ra được Internet); kiểm tra bằng mắt chỉ trên Chromium. Thao tác quản trị đổi cả bản đồ (vd *Tạo bản đồ mới*) làm khách không còn điểm giao để chọn: đây là hành vi đúng của quyền quản trị, không phải lỗi.
+83. **Bỏ nút tài khoản dùng thử** ở mọi chế độ (kể cả chế độ demo của máy chủ): nút đó điền sẵn mật khẩu trong mã trang, ai mở trang cũng thấy được. Hộp thư giả lập ở chế độ demo vẫn giữ để thử quên mật khẩu.
+84. **OSRM**: giới hạn 1 yêu cầu/giây và bộ nhớ đệm trên trình duyệt chỉ áp dụng cho OpenStreetMap; kết quả của Google **không** được lưu xuống máy (điều khoản của Google). Bộ nhớ đệm OSRM nằm trong `localStorage` (khoá `osrm.cache.v1`), xoá dữ liệu trang là mất.
+85. **Thiết kế v14** dùng `:has()` để tô sọc trạng thái của thẻ đơn; trình duyệt cũ không hỗ trợ `:has()` chỉ mất sọc màu, mọi thứ khác giữ nguyên. Dải màu chỉ dùng cho điểm nhấn để chữ trên nền trắng vẫn đủ tương phản.

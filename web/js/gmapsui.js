@@ -25,7 +25,14 @@ export function initBaseMap({ map, stage, toast }) {
     pop.querySelector('#gm-stats').textContent = st ? `Đã hỏi ${g.label} ${st.calls} lượt tìm đường, đang nhớ ${st.cached} tuyến.` : '';
   };
   document.addEventListener('geo:update', () => { if (!pop.hidden) paint(); });
-  for (const b of [google, osm]) b.onNotice = (m) => { toast(m, 'error'); paint(); say(m, true); };
+  // Báo lỗi bản đồ nền một lần mỗi phiên (màu cảnh báo, không phải lỗi đỏ): bản đồ sơ đồ của đồ án vẫn dùng bình thường
+  const told = new Set();
+  for (const b of [google, osm]) b.onNotice = (m) => {
+    let seen = false;
+    try { seen = sessionStorage.getItem('map.notice') === m; sessionStorage.setItem('map.notice', m); } catch { /* bỏ qua */ }
+    if (!told.has(m) && !seen) toast(m, 'warn');
+    told.add(m); paint(); say(m, true);
+  };
   // Google lỗi (khoá sai, chưa bật billing...) thì tự chuyển sang OpenStreetMap thay vì về sơ đồ trắng
   google.onError = (e) => { setBase('osm'); osm.enable().then(() => { paint(); say(`Google Maps không dùng được (${e.message}). Đã chuyển sang OpenStreetMap.`, true); }); toast(`Google Maps không dùng được: ${e.message}. Đã chuyển sang OpenStreetMap.`, 'error'); };
 

@@ -9,14 +9,18 @@ import {
   setFieldError, clearFieldErrors, showFieldErrors, EVENT_LABEL,
 } from './ui.js';
 
-const DEMO = [
-  { u: 'admin', p: 'admin123', role: 'Quản trị viên' },
-  { u: 'tuan', p: 'shipper123', role: 'Shipper' },
-  { u: 'anphat', p: 'khach123', role: 'Khách hàng' },
-  { u: 'khachvip', p: 'HuongViet@2026', role: 'Khách VIP' },
-  { u: 'cuahangmai', p: 'Mai@2026', role: 'Khách (chủ cửa hàng)' },
-  { u: 'ctv_hung', p: 'Hung@2026', role: 'Shipper chờ duyệt' },
+// Không còn nút "tài khoản dùng thử": người dùng tự nhập tài khoản; hệ thống đưa vào đúng trang của vai trò sau khi đăng nhập.
+const ROLE_HINTS = [
+  { icon: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>', name: 'Khách hàng', text: 'đặt đơn, theo dõi, ví' },
+  { icon: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h2l3-7h4l3 7M9 10H6"/>', name: 'Shipper', text: 'nhận đơn, giao hàng' },
+  { icon: '<path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>', name: 'Quản trị', text: 'điều phối, đối soát' },
 ];
+const FEATURES = [
+  { icon: '<circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/>', b: 'Tìm shipper gần nhất', s: 'Ghép tự động theo thời gian chạy tới kho' },
+  { icon: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', b: 'Theo dõi trực tiếp', s: 'Xe chạy trên bản đồ, mã nhận hàng cho người nhận' },
+  { icon: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>', b: 'Đối soát minh bạch', s: 'Thu hộ, ví, sao kê xuất CSV' },
+];
+const svgIcon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const BRAND_SVG = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 22.5 14 13l5 6 4.5-8.5" class="brand-route"/><circle cx="9" cy="22.5" r="2.6" class="brand-dot"/><circle cx="23.5" cy="10.5" r="2.6" class="brand-dot"/></svg>';
 
 let el, onLogin, info = null, view = 'login', tool = 'quote', flash = null, resetEmail = '', lastUser = '';
@@ -77,19 +81,20 @@ function render() {
       <nav class="guest-nav" aria-label="Khách vãng lai">
         <button type="button" class="link" data-tool="quote">Báo giá</button>
         <button type="button" class="link" data-tool="track">Tra cứu đơn</button>
-        <button type="button" class="btn small ghost" data-view="login">Đăng nhập</button>
+        <button type="button" class="btn small ghost nav-login" data-view="login">Đăng nhập</button>
         <button type="button" class="btn small primary" data-view="register">Đăng ký</button>
       </nav>
     </header>
     <div class="guest-grid">
       <section class="guest-hero" aria-labelledby="hero-title">
         <p class="eyebrow">Giao hàng nội thành trong ngày</p>
-        <h1 id="hero-title">Đặt đơn một phút,<br>theo dõi tới tận cửa.</h1>
+        <h1 id="hero-title">Đặt đơn một phút,<br><span class="grad-text">theo dõi tới tận cửa.</span></h1>
         <p class="lead">Cước tính theo đường ngắn nhất từ kho, shipper xác nhận giao bằng mã 4 số của người nhận, tiền thu hộ được đối soát minh bạch.</p>
+        <ul class="hero-features">${FEATURES.map((f) => `<li><span class="hf-ic">${svgIcon(f.icon)}</span><span><b>${f.b}</b><small>${f.s}</small></span></li>`).join('')}</ul>
         <div class="hero-stats">
           <span><b>${info ? info.nodes.length : '–'}</b> điểm giao</span>
           <span><b>${info ? info.shippers : '–'}</b> shipper</span>
-          <span><b>${info ? info.delivered : '–'}</b> đơn đã giao</span>
+          ${info && info.delivered ? `<span><b>${info.delivered}</b> đơn đã giao</span>` : '<span><b>24/7</b> đặt đơn trực tuyến</span>'}
         </div>
         <div class="guest-tool" id="guest-tool">
           <div class="tabs" role="tablist">
@@ -102,6 +107,7 @@ function render() {
       </section>
       <section class="auth-card" aria-live="polite">${cardHtml()}</section>
     </div>
+    <footer class="guest-foot"><span>© ${new Date().getFullYear()} Giao Nhanh 08 · Đồ án Cấu trúc dữ liệu &amp; Giải thuật</span><span>Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></span></footer>
   </div>`;
   bind();
 }
@@ -191,11 +197,11 @@ function loginHtml() {
     <p class="login-sub">Dùng tên đăng nhập, email hoặc số điện thoại.</p>
     ${flashHtml()}
     <label class="field"><span>Tài khoản</span><input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" value="${escapeHtml(lastUser)}" placeholder="tên đăng nhập, email hoặc SĐT" required></label>
-    <div class="field"><span class="field-row"><label for="login-pass">Mật khẩu</label><button type="button" class="link" data-view="forgot">Quên mật khẩu?</button></span>${passwordInput('password', { id: 'login-pass' })}</div>
+    <div class="field"><span class="field-row"><label for="login-pass">Mật khẩu</label><button type="button" class="link" data-view="forgot">Quên mật khẩu?</button></span>${passwordInput('password', { id: 'login-pass' })}<small class="caps-warn" id="caps-warn" hidden>Đang bật Caps Lock</small></div>
     <label class="check"><input type="checkbox" name="remember"> Ghi nhớ đăng nhập trên máy này (30 ngày)</label>
     <button class="btn primary block-btn" id="login-btn">Đăng nhập</button>
     <p class="auth-switch">Chưa có tài khoản? <button type="button" class="link" data-view="register">Đăng ký ngay</button></p>
-    ${info && info.demo ? `<div class="login-demo"><span>Tài khoản dùng thử</span><div class="demo-list">${DEMO.map((d) => `<button type="button" data-demo="${d.u}" data-pass="${escapeHtml(d.p)}"><b>${d.role}</b><small>${d.u}</small></button>`).join('')}</div></div>` : ''}
+    <div class="role-hint"><span>Một trang đăng nhập cho mọi vai trò</span><ul>${ROLE_HINTS.map((r) => `<li>${svgIcon(r.icon)}<b>${r.name}</b><small>${r.text}</small></li>`).join('')}</ul></div>
   </form>`;
 }
 
@@ -305,9 +311,10 @@ function bindLogin() {
       }
     }, $('#login-btn', el));
   });
-  for (const b of f.querySelectorAll('[data-demo]')) {
-    b.addEventListener('click', () => { f.username.value = b.dataset.demo; f.password.value = b.dataset.pass; f.requestSubmit(); });
-  }
+  // Cảnh báo Caps Lock khi gõ mật khẩu (lý do phổ biến nhất của "sai mật khẩu")
+  const pw = f.password, capsEl = $('#caps-warn', el);
+  const caps = (e) => { if (capsEl && e.getModifierState) capsEl.hidden = !e.getModifierState('CapsLock'); };
+  if (pw) { pw.addEventListener('keydown', caps); pw.addEventListener('keyup', caps); pw.addEventListener('blur', () => { if (capsEl) capsEl.hidden = true; }); }
 }
 
 function checkRegister(f, only) {

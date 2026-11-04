@@ -175,6 +175,7 @@ export class RouteGeo {
   }
 
   stats() { return { calls: this.calls, cached: this.cache.size, errors: this.errors, fatal: this.fatal }; }
+  _save() { /* Google: không lưu kết quả xuống máy (điều khoản của Google) */ }
   setTraffic(on) { if (this.traffic === on) return; this.traffic = on; this.cache.clear(); this.bad.clear(); this._notify(); }
   reset() { this.fatal = ''; this.bad.clear(); this._notify(); }
   _notify() { if (this._raf) return; this._raf = requestAnimationFrame(() => { this._raf = 0; this.onUpdate(); }); }
@@ -196,10 +197,10 @@ export class RouteGeo {
   }
 
   _pump() {
-    while (this.active < 3 && this.queue.length) {
+    while (this.active < (this.maxActive || 3) && this.queue.length) {
       const job = this.queue.shift();
       this.active++;
-      this._follow(job).then((entry) => { if (entry) this.cache.set(job.key, entry); else this.bad.set(job.key, Date.now()); })
+      this._follow(job).then((entry) => { if (entry) { this.cache.set(job.key, entry); this._save(job.key, entry); } else this.bad.set(job.key, Date.now()); })
         .catch(() => this.bad.set(job.key, Date.now()))
         .finally(() => { this.pending.delete(job.key); this.active--; this._notify(); this._pump(); });
     }
@@ -398,10 +399,29 @@ export class OsmBase {
 }
 
 // Đường thật qua OSRM, cùng giao diện với RouteGeo của Google (peek / want / best / stats).
+// Máy chủ OSRM công cộng cho phép khoảng 1 yêu cầu / giây: gửi lần lượt từng yêu cầu, cách nhau ≥ 1,1 giây, gặp 429 thì chờ
+// rồi thử lại; đường đã tìm được lưu vào localStorage (tối đa 80 tuyến) để mở lại trang không phải hỏi lại.
+const OSRM_STORE = 'osrm.cache.v1', OSRM_KEEP = 80, OSRM_GAP = 1100;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export class OsmGeo extends RouteGeo {
-  constructor(o) { super(o); this.label = 'OpenStreetMap'; this.streak = 0; }
-  async _compute(coords, mode, { alternatives = false } = {}) {
+  constructor(o) {
+    super(o); this.label = 'OpenStreetMap'; this.streak = 0; this.maxActive = 1; this.last = 0;
+    try {
+      const saved = JSON.parse(localStorage.getItem(OSRM_STORE) || '[]');
+      for (const [k, v] of saved) if (v && Array.isArray(v.pts) && Array.isArray(v.idx)) this.cache.set(k, v);
+    } catch { /* bộ nhớ trình duyệt bị chặn hoặc hỏng: bỏ qua */ }
+  }
+  _save(key, entry) {
+    try {
+      const all = [...this.cache.entries()].filter(([k]) => !k.startsWith('best|')).slice(-OSRM_KEEP);
+      localStorage.setItem(OSRM_STORE, JSON.stringify(all));
+    } catch { /* đầy bộ nhớ: bỏ qua */ }
+  }
+  async _compute(coords, mode, { alternatives = false } = {}, attempt = 0) {
     if (this.fatal) throw new Error(this.fatal);
+    const wait = this.last + OSRM_GAP - Date.now();
+    if (wait > 0) await sleep(wait);
+    this.last = Date.now();
     if (this.calls >= MAX_CALLS) { this.fatal = `Đã dùng ${MAX_CALLS} lượt hỏi OSRM trong lần mở trang này, các tuyến sau vẽ theo đồ thị. Tải lại trang để tiếp tục.`; this.onFatal(this.fatal); throw new Error(this.fatal); }
     const path = coords.map((c) => `${c[1].toFixed(6)},${c[0].toFixed(6)}`).join(';');
     const url = `${OSRM}/${path}?overview=full&geometries=geojson&steps=false${alternatives && coords.length === 2 ? '&alternatives=3' : ''}`;
@@ -410,6 +430,11 @@ export class OsmGeo extends RouteGeo {
     const timer = setTimeout(() => ctl.abort(), 12000);
     try {
       const res = await fetch(url, { signal: ctl.signal });
+      if (res.status === 429 && attempt < 3) {   // quá nhanh: chờ rồi thử lại, không tính là máy chủ hỏng
+        clearTimeout(timer); this.calls--;
+        await sleep(2000 * (attempt + 1));
+        return this._compute(coords, mode, { alternatives }, attempt + 1);
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.code !== 'Ok' || !data.routes || !data.routes.length) throw new Error(data.code || 'ZERO_RESULTS');
